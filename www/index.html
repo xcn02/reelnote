@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<title>ReelNote</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#0f172a;--mut:#64748b;--line:#e2e8f0;--ac:#6366f1;--ac2:#ec4899;--ok:#16a34a;--warn:#d97706;--err:#dc2626}
+@media(prefers-color-scheme:dark){:root{--bg:#0b1020;--card:#151b2e;--tx:#e8ecf5;--mut:#94a3b8;--line:#25304a}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,Roboto,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 14px 6px;padding-top:max(12px,env(safe-area-inset-top))}
+.top{display:flex;gap:8px;align-items:center}
+h1{font-size:20px;margin:0;flex:1;background:linear-gradient(90deg,var(--ac),var(--ac2));-webkit-background-clip:text;background-clip:text;color:transparent}
+button,select,input,textarea{font:inherit;color:inherit}
+.ib{border:0;background:var(--card);border-radius:12px;width:40px;height:40px;font-size:18px;border:1px solid var(--line)}
+#q{width:100%;margin-top:10px;padding:11px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card)}
+#chips{display:flex;gap:8px;overflow-x:auto;padding:10px 0 6px;scrollbar-width:none}
+#chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--card);border-radius:20px;padding:6px 12px;font-size:13px}
+.chip.on{background:var(--ac);border-color:var(--ac);color:#fff}
+main{padding:6px 14px 90px;max-width:720px;margin:auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin:10px 0}
+.card h3{margin:0 0 6px;font-size:16px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{font-size:12px;padding:2px 9px;border-radius:10px;background:color-mix(in srgb,var(--ac) 15%,transparent);color:var(--ac)}
+.tag{font-size:12px;color:var(--mut)}
+.sum{color:var(--mut);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin:6px 0}
+.st{font-size:13px;margin:6px 0}.st.w{color:var(--warn)}.st.e{color:var(--err)}
+.spin{display:inline-block;animation:r 1s linear infinite}@keyframes r{to{transform:rotate(360deg)}}
+.empty{text-align:center;color:var(--mut);padding:50px 20px}
+#fab{position:fixed;right:18px;bottom:max(18px,env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;border:0;font-size:28px;color:#fff;background:linear-gradient(135deg,var(--ac),var(--ac2));box-shadow:0 6px 18px rgba(99,102,241,.45)}
+dialog{border:0;border-radius:20px;padding:0;width:min(94vw,560px);max-height:90vh;background:var(--bg);color:var(--tx)}
+dialog::backdrop{background:rgba(0,0,0,.55)}
+.dl{padding:16px;display:flex;flex-direction:column;gap:10px}
+.dl label{font-size:12px;color:var(--mut);display:block;margin-bottom:3px}
+.dl input,.dl select,.dl textarea{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--card)}
+.dl input[type=checkbox]{width:auto;margin-right:6px}
+.dl textarea{min-height:70px;resize:vertical}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:9px 12px;font-size:14px}
+.btn.p{background:var(--ac);border-color:var(--ac);color:#fff}.btn.d{color:var(--err)}
+ul.pts{margin:0;padding-left:18px}
+.hint{font-size:12px;color:var(--mut)}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;max-width:88vw;z-index:20}
+#toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>🎬 ReelNote</h1>
+    <button class="ib" id="bAdd" title="Ajouter un lien">＋</button>
+    <button class="ib" id="bSet" title="Réglages">⚙️</button>
+  </div>
+  <input id="q" type="search" placeholder="Rechercher (titre, résumé, tag, auteur, note…)">
+  <div id="chips"></div>
+</header>
+<main id="list"></main>
+<button id="fab" title="Ajouter un lien">＋</button>
+
+<dialog id="dAdd"><div class="dl">
+  <b>Ajouter un reel</b>
+  <div><label>Lien (Instagram, TikTok, YouTube Shorts…)</label><input id="addUrl" type="url" placeholder="https://www.instagram.com/reel/..."></div>
+  <div><label>Légende (optionnel, améliore le résumé)</label><textarea id="addCap"></textarea></div>
+  <div class="btns"><button class="btn p" id="addOk">Enregistrer et analyser</button><button class="btn" data-close>Annuler</button></div>
+</div></dialog>
+
+<dialog id="dDet"><div class="dl" id="detBody"></div></dialog>
+
+<dialog id="dSet"><div class="dl">
+  <b>Réglages</b>
+  <div><label>IA utilisée</label>
+    <select id="sProv">
+      <option value="gemini">Google Gemini (clé gratuite AI Studio)</option>
+      <option value="claude">Anthropic Claude</option>
+      <option value="openai">OpenAI</option>
+      <option value="custom">Autre (compatible OpenAI : Groq, OpenRouter, Ollama…)</option>
+    </select></div>
+  <div><label>Clé API</label><input id="sKey" type="password" autocomplete="off" placeholder="Colle ta clé ici"></div>
+  <div><label>Modèle</label><input id="sModel" autocomplete="off"></div>
+  <div id="bu" style="display:none"><label>URL de base (ex : https://api.groq.com/openai/v1)</label><input id="sBase" autocomplete="off"></div>
+  <div><label>Langue des résumés</label><input id="sLang"></div>
+  <div><label>Catégories (séparées par des virgules)</label><textarea id="sCats"></textarea></div>
+  <div><label style="font-size:13px;color:var(--tx)"><input type="checkbox" id="sJina">Lecteur externe (r.jina.ai) en dernier recours</label>
+    <div class="hint">Si l’aperçu direct du lien ne donne rien, le lien est envoyé à ce service tiers qui lit la page à ta place. Décoche pour que rien ne passe par un tiers.</div></div>
+  <p class="hint">La clé reste sur ton téléphone. Le contenu du reel est envoyé uniquement à l'IA que tu choisis. Pour la clé Gemini gratuite : aistudio.google.com/apikey (l'abonnement Gemini Plus ne donne pas de clé API). Si le test de connexion échoue avec « modèle introuvable », vérifie le nom du modèle dans AI Studio.</p>
+  <div class="btns">
+    <button class="btn p" id="sTest">Tester la connexion</button>
+    <button class="btn" id="sRetry">Relancer les échecs</button>
+    <button class="btn" id="sExpJ">Export JSON</button>
+    <button class="btn" id="sExpM">Export Markdown</button>
+    <label class="btn" style="margin:0">Importer JSON<input id="sImp" type="file" accept=".json" hidden></label>
+    <button class="btn" data-close>Fermer</button>
+  </div>
+</div></dialog>
+<div id="toast"></div>
+
+<script src="lib.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+const LS={get(k,d){try{const v=JSON.parse(localStorage.getItem(k));return v??d}catch{return d}},set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
+const DEF_CATS=['Cuisine','Fitness & santé','Bricolage & maison','Tech & IA','Business & argent','Voyage','Humour','Mode & beauté','Musique & danse','Éducation','Motivation','Auto & moto','Autre'];
+const DEF_MODELS={gemini:'gemini-2.5-flash',claude:'claude-haiku-5-5',openai:'gpt-4o-mini',custom:''};
+const MAX_IMG=10*1024*1024;     // captures d'écran
+const MAX_MEDIA=120*1024*1024;  // enregistrement / audio source : jamais envoyé tel quel, on n'en extrait que le son
+const MAX_AUDIO_SEC=120;        // au-delà, le son est tronqué (WAV 16 kHz mono ≈ 3,8 Mo ≈ 3 840 tokens Gemini)
+let items=LS.get('items',[]);
+let cfg=Object.assign({provider:'gemini',keys:{},models:{},base:'',lang:'français',cats:DEF_CATS,jina:true},LS.get('cfg',{}));
+let filter='all',cur=null;
+const save=()=>{LS.set('items',items);};
+const saveCfg=()=>LS.set('cfg',cfg);
+const get=id=>items.find(i=>i.id===id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),2800)}
+const isNative=()=>!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
+
+/* ---------- ajout / partage ---------- */
+const findUrl=ReelLib.findUrl;
+function addItem(url,extra={}){
+  const ex=items.find(i=>i.url===url);
+  if(ex){toast('Déjà enregistré');openDetail(ex.id);return ex}
+  const it={id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),url,createdAt:Date.now(),status:'pending',title:'',summary:'',points:[],category:'',tags:[],fav:false,note:'',caption:extra.caption||'',shared:extra.shared||'',author:'',error:''};
+  items.unshift(it);save();render();enqueue(it.id);return it;
+}
+function processShared(txt){
+  const url=findUrl(txt);
+  if(url){
+    const shared=txt.replace(/https?:\/\/\S+/g,'').trim();
+    addItem(url,{shared});
+    toast('Reel enregistré, analyse en cours…');
+  }else if(txt)toast('Aucun lien trouvé dans le partage');
+}
+/* PWA installée depuis Chrome : le partage arrive dans l'URL (share_target du manifest) */
+function handleShare(){
+  const p=new URLSearchParams(location.search);
+  if(![...p.keys()].length)return;
+  const txt=[p.get('url'),p.get('text'),p.get('title')].filter(Boolean).join(' ');
+  history.replaceState(null,'',location.pathname);
+  processShared(txt);
+}
+/* App Android (Capacitor) : le partage arrive via le plugin natif ShareIntent */
+async function initNativeShare(){
+  if(!isNative())return;
+  try{
+    const SI=window.Capacitor.registerPlugin('ShareIntent');
+    const take=async()=>{try{const r=await SI.getPending();if(r&&r.text)processShared(r.text)}catch{}};
+    await SI.addListener('shared',take);
+    await take();
+  }catch{}
+}
+
+/* ---------- IA ---------- */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function parseJSON(t){
+  t=String(t||'').trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+  try{return JSON.parse(t)}catch{
+    const a=t.indexOf('{'),b=t.lastIndexOf('}');
+    if(a>=0&&b>a)return JSON.parse(t.slice(a,b+1));
+    throw new Error('Réponse IA illisible');
+  }
+}
+function b64(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=()=>rej(new Error('Lecture du fichier impossible'));r.readAsDataURL(file)})}
+/* Son uniquement : la vidéo n'est JAMAIS envoyée. Le son est extrait sur le téléphone puis converti en
+   WAV 16 kHz mono (≈ 2 Mo/min ; 32 tokens/s chez Gemini, soit ~10× moins qu'une vidéo). */
+async function extractAudio(file){
+  const AC=window.AudioContext||window.webkitAudioContext,OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+  if(!AC||!OAC)throw new Error('Extraction du son non disponible sur cet appareil');
+  const raw=await file.arrayBuffer();
+  const ctx=new AC();let dec;
+  try{dec=await ctx.decodeAudioData(raw)}
+  catch{throw new Error('Impossible de lire le son de ce fichier (aucune piste audio, ou format non pris en charge)')}
+  finally{try{ctx.close()}catch{}}
+  const sec=Math.min(dec.duration,MAX_AUDIO_SEC),rate=16000;
+  const off=new OAC(1,Math.max(1,Math.ceil(sec*rate)),rate);
+  const src=off.createBufferSource();src.buffer=dec;src.connect(off.destination);src.start(0);
+  const pcm=(await off.startRendering()).getChannelData(0);
+  if(ReelLib.audioStats(pcm).peak<0.01)throw new Error('Aucun son détecté. Dans l’enregistreur d’écran, active le « son du média / son interne » (pas seulement le micro).');
+  return{blob:new Blob([ReelLib.encodeWav(pcm,rate)],{type:'audio/wav'}),seconds:sec,truncated:dec.duration>MAX_AUDIO_SEC};
+}
+async function readFiles(list){
+  const out=[];
+  for(const f of list){
+    const type=f.type||'application/octet-stream';
+    if(type.startsWith('image/')){
+      if(f.size>MAX_IMG)throw new Error('Capture trop lourde (max 10 Mo)');
+      out.push({type,b64:await b64(f)});
+    }else if(type.startsWith('audio/')||type.startsWith('video/')){
+      if(cfg.provider!=='gemini')throw new Error('Le son n’est géré qu’avec Gemini. Utilise une capture d’écran ou change d’IA dans les réglages.');
+      if(f.size>MAX_MEDIA)throw new Error('Fichier trop volumineux (max 120 Mo)');
+      const a=await extractAudio(f);
+      toast(`Son extrait : ${Math.round(a.seconds)} s${a.truncated?' (tronqué à '+MAX_AUDIO_SEC+' s)':''}, ${(a.blob.size/1048576).toFixed(1)} Mo envoyés`);
+      out.push({type:'audio/wav',b64:await b64(a.blob),audio:true});
+    }else throw new Error('Type de fichier non pris en charge : '+type);
+  }
+  return out;
+}
+async function http(url,opt){
+  let last;
+  for(let n=0;n<3;n++){
+    try{
+      const r=await fetch(url,opt);
+      if(r.ok)return await r.json();
+      let msg='Erreur '+r.status;
+      try{const j=await r.json();msg=(j.error&&(j.error.message||j.error))||j.message||msg;if(typeof msg!=='string')msg=JSON.stringify(msg)}catch{}
+      last=new Error(msg);
+      if(![429,500,502,503,529].includes(r.status))throw last;
+    }catch(e){last=e;if(e.name!=='TypeError'&&!/Erreur (429|5)/.test(e.message)&&n>=0&&!/overload|unavailable|quota|rate/i.test(e.message))throw e}
+    await sleep(2000*(n+1));
+  }
+  throw last;
+}
+async function callAI(prompt,files=[]){
+  const p=cfg.provider,key=cfg.keys[p]||'',model=(cfg.models[p]||DEF_MODELS[p]||'').trim();
+  if(!key&&p!=='custom')throw new Error('Clé API manquante : ouvre les réglages ⚙️');
+  if(!model)throw new Error('Modèle non renseigné dans les réglages');
+  for(let attempt=0;attempt<2;attempt++){
+    let text='';
+    if(p==='gemini'){
+      const parts=[{text:prompt},...files.map(f=>({inline_data:{mime_type:f.type,data:f.b64}}))];
+      const j=await http(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({contents:[{parts}],generationConfig:{responseMimeType:'application/json',temperature:.3}})});
+      const c=j.candidates&&j.candidates[0];
+      if(!c||!c.content)throw new Error('Gemini n’a rien renvoyé (contenu bloqué ?)');
+      text=c.content.parts.map(x=>x.text||'').join('');
+    }else if(p==='claude'){
+      const content=[...files.map(f=>({type:'image',source:{type:'base64',media_type:f.type,data:f.b64}})),{type:'text',text:prompt}];
+      const j=await http('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model,max_tokens:1200,messages:[{role:'user',content}]})});
+      text=(j.content||[]).map(x=>x.text||'').join('');
+    }else{
+      const base=p==='openai'?'https://api.openai.com/v1':(cfg.base||'').replace(/\/$/,'');
+      if(!base)throw new Error('URL de base manquante dans les réglages');
+      const content=[{type:'text',text:prompt},...files.map(f=>({type:'image_url',image_url:{url:`data:${f.type};base64,${f.b64}`}}))];
+      const body={model,messages:[{role:'user',content:files.length?content:prompt}],temperature:.3};
+      if(p==='openai')body.response_format={type:'json_object'};
+      const headers={'Content-Type':'application/json'};if(key)headers.Authorization='Bearer '+key;
+      const j=await http(base+'/chat/completions',{method:'POST',headers,body:JSON.stringify(body)});
+      text=j.choices&&j.choices[0]&&j.choices[0].message.content;
+    }
+    try{return parseJSON(text)}catch(e){if(attempt===1)throw e}
+  }
+}
+
+/* ---------- récupération du contenu autour du lien (meilleur effort) ----------
+   Trois étapes, de la plus propre à la plus fragile ; chacune peut échouer sans conséquence :
+   1. oEmbed officiel de Meta  → auteur (sans token ; ni légende ni miniature)
+   2. aperçu OpenGraph du lien → ce que verrait une carte de lien (souvent un mur de connexion)
+   3. lecteur externe r.jina.ai → optionnel (réglage), le lien passe alors par un tiers
+   Dans l'app Android, fetch() passe par le réseau natif (CapacitorHttp) : pas de blocage CORS. */
+async function fetchT(url,opt={},ms=12000){
+  const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);
+  try{return await fetch(url,{...opt,signal:c.signal})}finally{clearTimeout(t)}
+}
+async function fetchMeta(it,wantText){
+  const out={text:'',author:''};
+  const canon=ReelLib.canonicalInstagram(it.url);
+  if(canon&&!it.author){
+    try{
+      const r=await fetchT('https://graph.facebook.com/instagram_oembed?url='+encodeURIComponent(canon),{},10000);
+      if(r.ok){const j=await r.json();if(j&&typeof j.html==='string')out.author=ReelLib.parseOEmbedAuthor(j.html)||''}
+    }catch{}
+  }
+  if(!wantText)return out;
+  try{
+    const r=await fetchT(it.url,{headers:{Accept:'text/html'}});
+    if(r.ok){
+      const pv=ReelLib.parsePreview((await r.text()).slice(0,300000));
+      if(pv.author&&!out.author&&!it.author)out.author=pv.author;
+      if(pv.usable)out.text=`Titre : ${pv.title}\nDescription : ${pv.description}`;
+    }
+  }catch{}
+  if(!out.text&&cfg.jina){
+    try{
+      const r=await fetchT('https://r.jina.ai/'+it.url,{headers:{Accept:'text/plain'}});
+      if(r.ok)out.text=(await r.text()).slice(0,6000);
+    }catch{}
+  }
+  return out;
+}
+function buildPrompt(it,page,files=[]){
+  const cats=cfg.cats.join(', ');
+  const nImg=files.filter(f=>!f.audio).length,hasAudio=files.some(f=>f.audio);
+  const pj=[nImg?nImg+' capture(s) d’écran':'',hasAudio?'l’enregistrement audio du reel (voix, musique)':''].filter(Boolean).join(' + ')||'aucune';
+  return `Tu analyses une courte vidéo de réseau social (Reel, TikTok, Short) enregistrée par l'utilisateur. Réponds en ${cfg.lang||'français'}.
+Lien : ${it.url}
+Auteur : ${it.author?'@'+it.author:'(inconnu)'}
+Texte partagé : ${it.shared||'(aucun)'}
+Légende fournie par l'utilisateur : ${it.caption||'(aucune)'}
+Transcription déjà obtenue : ${it.transcript||'(aucune)'}
+Pièces jointes : ${pj}
+Contenu récupéré sur la page (peut contenir du bruit ou un mur de connexion, ignore-le dans ce cas) :
+${page||'(rien)'}
+
+Réponds UNIQUEMENT avec un objet JSON :
+{"enough":true|false,"title":"titre court, 60 caractères max","summary":"résumé clair en 2 à 4 phrases","points":["3 à 5 points clés ou étapes"],"category":"UNE catégorie choisie STRICTEMENT dans cette liste : ${cats}","tags":["3 à 6 mots-clés en minuscules"]${hasAudio?',"transcript":"transcription fidèle de la parole entendue (1500 caractères max ; vide si aucune parole)"':''}}
+${hasAudio?"Un enregistrement audio est joint : écoute-le, c'est la source principale.\n":""}"enough" vaut false si tu n'as AUCUN contenu réel sur la vidéo (légende, transcription, description ou média). Dans ce cas n'invente rien : laisse summary vide.`;
+}
+const queue=[];let running=false,current=null;
+function enqueue(id,opts){queue.push([id,opts]);if(!running)runQueue()}
+async function runQueue(){running=true;while(queue.length){const [id,o]=queue.shift();current=id;await analyze(id,o)}current=null;running=false}
+async function analyze(id,o={}){
+  const it=get(id);if(!it)return;
+  it.status='working';it.error='';save();render();
+  try{
+    const files=await readFiles(o.files||[]);
+    const meta=await fetchMeta(it,!it.caption&&!it.transcript&&!files.length);
+    if(meta.author&&!it.author)it.author=meta.author;
+    const r=await callAI(buildPrompt(it,meta.text,files),files);
+    const catMatch=cfg.cats.find(c=>c.toLowerCase()===String(r.category||'').toLowerCase());
+    it.title=String(r.title||it.title||'').slice(0,120);
+    it.tags=(Array.isArray(r.tags)?r.tags:[]).map(t=>String(t).toLowerCase().replace(/^#/,'')).slice(0,8);
+    if(String(r.transcript||'').trim())it.transcript=String(r.transcript).trim().slice(0,3000); // gardée : relancer une analyse ne renvoie plus l'audio
+    it.category=catMatch||cfg.cats.find(c=>c==='Autre')||cfg.cats[cfg.cats.length-1]||'Autre';
+    if(r.enough===false||!String(r.summary||'').trim()){
+      it.status='partial';
+      it.error='Contenu inaccessible (Instagram bloque la lecture). Ouvre la fiche, colle la légende ou ajoute la vidéo / une capture.';
+      // Sans contenu : on propose la catégorie habituelle de cet auteur, apprise de ta bibliothèque.
+      if(it.author){
+        const sug=ReelLib.dominantCategory(items.filter(x=>x.id!==it.id&&x.author===it.author&&x.status==='done').map(x=>x.category));
+        if(sug&&cfg.cats.includes(sug)){it.category=sug;it.error+=' Catégorie suggérée d’après l’auteur.'}
+      }
+    }else{
+      it.summary=String(r.summary).trim();
+      it.points=(Array.isArray(r.points)?r.points:[]).map(String).slice(0,6);
+      it.status='done';
+    }
+  }catch(e){
+    it.status='error';it.error=e.message||String(e);
+  }
+  save();render();
+  if($('#dDet').open&&cur===id)openDetail(id);
+}
+
+/* ---------- rendu ---------- */
+function render(){
+  const q=($('#q').value||'').toLowerCase().trim();
+  const counts={};items.forEach(i=>{if(i.category)counts[i.category]=(counts[i.category]||0)+1});
+  const favN=items.filter(i=>i.fav).length;
+  let ch=`<button class="chip ${filter==='all'?'on':''}" data-f="all">Tous (${items.length})</button>`;
+  if(favN)ch+=`<button class="chip ${filter==='fav'?'on':''}" data-f="fav">★ Favoris (${favN})</button>`;
+  Object.keys(counts).sort().forEach(c=>ch+=`<button class="chip ${filter===c?'on':''}" data-f="${esc(c)}">${esc(c)} (${counts[c]})</button>`);
+  $('#chips').innerHTML=ch;
+  const list=items.filter(i=>{
+    if(filter==='fav'&&!i.fav)return false;
+    if(filter!=='all'&&filter!=='fav'&&i.category!==filter)return false;
+    if(q){const h=[i.title,i.summary,i.category,(i.tags||[]).join(' '),i.note,i.caption,i.transcript,i.author,i.url].join(' ').toLowerCase();if(!h.includes(q))return false}
+    return true;
+  });
+  if(!list.length){$('#list').innerHTML=`<div class="empty">${items.length?'Aucun résultat.':'Aucun reel pour l’instant.<br><br>Dans Instagram : <b>Partager → ReelNote</b><br>ou appuie sur ＋ pour coller un lien.'}</div>`;return}
+  $('#list').innerHTML=list.map(i=>{
+    const name=i.title||i.url.replace(/^https?:\/\/(www\.)?/,'').slice(0,50);
+    let st='';
+    if(i.status==='pending'||i.status==='working')st='<div class="st"><span class="spin">⏳</span> Analyse en cours…</div>';
+    else if(i.status==='error')st=`<div class="st e">⚠️ ${esc(i.error)}</div>`;
+    else if(i.status==='partial')st='<div class="st w">✋ Contenu à compléter : ouvre la fiche</div>';
+    return `<div class="card" data-id="${i.id}">
+      <div class="row"><h3 style="flex:1">${i.fav?'★ ':''}${esc(name)}</h3></div>
+      <div class="row">${i.category?`<span class="pill">${esc(i.category)}</span>`:''}${i.author?`<span class="tag">@${esc(i.author)}</span>`:''}<span class="tag">${new Date(i.createdAt).toLocaleDateString('fr-FR')}</span></div>
+      ${i.summary?`<div class="sum">${esc(i.summary)}</div>`:''}
+      ${st}
+      ${(i.tags||[]).length?`<div class="tag">${i.tags.map(t=>'#'+esc(t)).join(' ')}</div>`:''}
+    </div>`;
+  }).join('');
+}
+function openDetail(id){
+  const i=get(id);if(!i)return;cur=id;
+  const busy=i.status==='working'||i.status==='pending';
+  $('#detBody').innerHTML=`
+    <div><label>Titre</label><input data-fld="title" value="${esc(i.title)}"></div>
+    ${i.author?`<div class="hint">Auteur : @${esc(i.author)}</div>`:''}
+    <div><label>Catégorie</label><select data-fld="category">${[...new Set([...cfg.cats,i.category].filter(Boolean))].map(c=>`<option ${c===i.category?'selected':''}>${esc(c)}</option>`).join('')}<option value="" ${i.category?'':'selected'}>— aucune —</option></select></div>
+    ${i.status==='error'||i.status==='partial'?`<div class="st ${i.status==='error'?'e':'w'}">${esc(i.error)}</div>`:''}
+    ${busy?'<div class="st"><span class="spin">⏳</span> Analyse en cours…</div>':''}
+    <div><label>Résumé</label><textarea data-fld="summary" style="min-height:110px">${esc(i.summary)}</textarea></div>
+    ${(i.points||[]).length?`<div><label>Points clés</label><ul class="pts">${i.points.map(p=>`<li>${esc(p)}</li>`).join('')}</ul></div>`:''}
+    <div><label>Tags (séparés par des virgules)</label><input data-fld="tags" value="${esc((i.tags||[]).join(', '))}"></div>
+    <div><label>Ma note</label><textarea data-fld="note">${esc(i.note)}</textarea></div>
+    <div><label>Légende (colle-la ici pour un meilleur résumé)</label><textarea data-fld="caption">${esc(i.caption)}</textarea></div>
+    ${i.transcript?`<div><label>Transcription (remplie depuis le son ; modifiable)</label><textarea data-fld="transcript">${esc(i.transcript)}</textarea></div>`:''}
+    <div><label>Capture d’écran, ou enregistrement / audio du reel (optionnel)</label><input type="file" id="files" accept="image/*,audio/*,video/*" multiple>
+      <div class="hint">Pour un enregistrement d’écran, seul le <b>son</b> est extrait et envoyé (≈ 2 Mo par minute, 2 min max) : la vidéo reste sur ton téléphone. Le son n’est géré qu’avec Gemini. Active le son interne dans l’enregistreur d’écran.</div></div>
+    <div class="btns">
+      <button class="btn p" data-a="re">${i.status==='done'?'Réanalyser':'Analyser'}</button>
+      <button class="btn" data-a="open">Ouvrir le lien</button>
+      <button class="btn" data-a="fav">${i.fav?'★ Retirer des favoris':'☆ Favori'}</button>
+      <button class="btn" data-a="copy">Copier</button>
+      <button class="btn" data-a="share">Partager</button>
+      <button class="btn d" data-a="del">Supprimer</button>
+      <button class="btn" data-close>Fermer</button>
+    </div>`;
+  if(!$('#dDet').open)$('#dDet').showModal();
+}
+
+/* ---------- événements ---------- */
+document.addEventListener('click',e=>{
+  if(e.target.closest('[data-close]')){e.target.closest('dialog').close();return}
+  const chip=e.target.closest('.chip');if(chip){filter=chip.dataset.f;render();return}
+  const card=e.target.closest('.card');if(card){openDetail(card.dataset.id);return}
+  const a=e.target.closest('[data-a]');if(!a)return;
+  const i=get(cur);if(!i)return;
+  const act=a.dataset.a;
+  if(act==='re'){const f=[...($('#files').files||[])];$('#dDet').close();enqueue(i.id,{files:f});toast('Analyse relancée')}
+  if(act==='open')window.open(i.url,'_blank');
+  if(act==='fav'){i.fav=!i.fav;save();render();openDetail(i.id)}
+  if(act==='copy'){navigator.clipboard.writeText(`${i.title}\n${i.category} · ${i.url}\n\n${i.summary}\n${(i.points||[]).map(p=>'• '+p).join('\n')}`).then(()=>toast('Copié'))}
+  if(act==='share'){if(navigator.share)navigator.share({title:i.title,text:i.summary,url:i.url}).catch(()=>{});else toast('Partage non disponible')}
+  if(act==='del'&&confirm('Supprimer ce reel ?')){items=items.filter(x=>x.id!==i.id);save();render();$('#dDet').close()}
+});
+$('#detBody').addEventListener('change',e=>{
+  const f=e.target.dataset.fld;const i=get(cur);if(!f||!i)return;
+  i[f]=f==='tags'?e.target.value.split(',').map(t=>t.trim().toLowerCase().replace(/^#/,'')).filter(Boolean):e.target.value;
+  save();render();
+});
+$('#q').addEventListener('input',render);
+const openAdd=()=>{$('#addUrl').value='';$('#addCap').value='';$('#dAdd').showModal()};
+$('#bAdd').onclick=openAdd;$('#fab').onclick=openAdd;
+$('#addOk').onclick=()=>{
+  const u=findUrl($('#addUrl').value);
+  if(!u){toast('Lien invalide');return}
+  $('#dAdd').close();addItem(u,{caption:$('#addCap').value.trim()});
+};
+
+/* réglages */
+function fillSet(){
+  const p=cfg.provider;
+  $('#sProv').value=p;$('#sKey').value=cfg.keys[p]||'';$('#sModel').value=cfg.models[p]||'';$('#sModel').placeholder=DEF_MODELS[p]||'nom du modèle';
+  $('#sBase').value=cfg.base||'';$('#bu').style.display=p==='custom'?'block':'none';
+  $('#sLang').value=cfg.lang;$('#sCats').value=cfg.cats.join(', ');$('#sJina').checked=cfg.jina!==false;
+}
+$('#bSet').onclick=()=>{fillSet();$('#dSet').showModal()};
+$('#sProv').onchange=e=>{cfg.provider=e.target.value;saveCfg();fillSet()};
+$('#sKey').onchange=e=>{cfg.keys[cfg.provider]=e.target.value.trim();saveCfg()};
+$('#sModel').onchange=e=>{cfg.models[cfg.provider]=e.target.value.trim();saveCfg()};
+$('#sBase').onchange=e=>{cfg.base=e.target.value.trim();saveCfg()};
+$('#sLang').onchange=e=>{cfg.lang=e.target.value.trim()||'français';saveCfg()};
+$('#sJina').onchange=e=>{cfg.jina=e.target.checked;saveCfg()};
+$('#sCats').onchange=e=>{
+  let c=e.target.value.split(',').map(x=>x.trim()).filter(Boolean);
+  if(!c.includes('Autre'))c.push('Autre');
+  cfg.cats=c;saveCfg();fillSet();render();
+};
+$('#sTest').onclick=async()=>{
+  toast('Test en cours…');
+  try{const r=await callAI('Réponds uniquement avec ce JSON : {"ok":true}');toast(r.ok?'✅ Connexion OK':'Réponse inattendue')}
+  catch(e){toast('❌ '+e.message)}
+};
+$('#sRetry').onclick=()=>{
+  const l=items.filter(i=>i.status!=='done');
+  if(!l.length){toast('Rien à relancer');return}
+  l.forEach(i=>enqueue(i.id));$('#dSet').close();toast(l.length+' analyse(s) relancée(s)');
+};
+function dl(name,txt,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+$('#sExpJ').onclick=()=>dl('reelnote-export.json',JSON.stringify(items,null,2),'application/json');
+$('#sExpM').onclick=()=>dl('reelnote-export.md',items.map(i=>`## ${i.title||i.url}\n- Catégorie : ${i.category||'—'}\n- Auteur : ${i.author?'@'+i.author:'—'}\n- Lien : ${i.url}\n- Tags : ${(i.tags||[]).join(', ')}\n\n${i.summary}\n\n${(i.points||[]).map(p=>'- '+p).join('\n')}\n${i.note?'\nNote : '+i.note+'\n':''}`).join('\n---\n\n'),'text/markdown');
+$('#sImp').onchange=async e=>{
+  try{
+    const arr=JSON.parse(await e.target.files[0].text());let n=0;
+    arr.forEach(x=>{if(x&&x.url&&!items.find(i=>i.url===x.url)){items.push(Object.assign({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),createdAt:Date.now(),status:'done',tags:[],points:[],fav:false,note:'',caption:'',author:'',error:''},x));n++}});
+    items.sort((a,b)=>b.createdAt-a.createdAt);save();render();toast(n+' importé(s)');
+  }catch{toast('Fichier invalide')}
+  e.target.value='';
+};
+
+/* démarrage */
+render();
+handleShare();
+initNativeShare();
+// reprise si l'appli a été fermée pendant l'analyse (sans relancer ce qui est déjà en file ou en cours : évite un 2e appel IA)
+items.forEach(i=>{if((i.status==='working'||i.status==='pending')&&i.id!==current&&!queue.some(q=>q[0]===i.id))enqueue(i.id)});
+if(!cfg.keys[cfg.provider]&&cfg.provider!=='custom'&&!items.length){fillSet();$('#dSet').showModal()}
+if('serviceWorker' in navigator&&!isNative())navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>

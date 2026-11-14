@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ReelNote</string>
+    <string name="title_activity_main">ReelNote</string>
+    <string name="package_name">app.reelnote.mobile</string>
+    <string name="custom_url_scheme">app.reelnote.mobile</string>
+</resources>

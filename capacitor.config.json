@@ -1,0 +1,8 @@
+{
+  "appId": "app.reelnote.mobile",
+  "appName": "ReelNote",
+  "webDir": "www",
+  "plugins": {
+    "CapacitorHttp": { "enabled": true }
+  }
+}

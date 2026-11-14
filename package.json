@@ -1,0 +1,18 @@
+{
+  "name": "reelnote",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ReelNote : bibliothèque personnelle de Reels avec résumés par IA",
+  "scripts": {
+    "test": "node --test test/lib.test.js && node test/smoke.cjs",
+    "sync": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.2",
+    "@capacitor/core": "8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2",
+    "jsdom": "^31.0.1"
+  }
+}
