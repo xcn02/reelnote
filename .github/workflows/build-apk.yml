@@ -1,0 +1,88 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]          # un tag v1.0.0 publie l'APK dans « Releases »
+  pull_request:
+  workflow_dispatch:       # bouton « Run workflow » dans l'onglet Actions
+
+permissions:
+  contents: write          # nécessaire pour attacher l'APK à une Release
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  apk:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - run: npm ci
+
+      # Clé de signature stable (facultatif mais recommandé) : sans elle, chaque build est signé
+      # avec une clé différente et Android refuse de mettre à jour l'app par-dessus l'ancienne
+      # (il faudrait la désinstaller, donc perdre les données). Voir le README.
+      - name: Restaurer la clé de signature
+        env:
+          DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$DEBUG_KEYSTORE_B64" ]; then
+            mkdir -p ~/.android
+            echo "$DEBUG_KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+            echo "Clé de signature restaurée."
+          else
+            echo "::warning::Secret DEBUG_KEYSTORE_B64 absent : l'APK sera signé avec une clé jetable (pas de mise à jour par-dessus une version installée)."
+          fi
+
+      - name: Copier la page web dans le projet Android
+        run: npx cap sync android
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Compiler l'APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Nommer l'APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ReelNote.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReelNote-apk
+          path: ReelNote.apk
+          if-no-files-found: error
+
+      - name: Publier dans Releases (tags v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ReelNote.apk
