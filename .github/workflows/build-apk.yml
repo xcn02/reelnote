@@ -1,14 +1,17 @@
+
 name: Build APK
 
 on:
   push:
-    branches: [main]
-    tags: ["v*"]          # un tag v1.0.0 publie l'APK dans « Releases »
+    branches:
+      - main
+    tags:
+      - 'v*'
   pull_request:
-  workflow_dispatch:       # bouton « Run workflow » dans l'onglet Actions
+  workflow_dispatch:
 
 permissions:
-  contents: write          # nécessaire pour attacher l'APK à une Release
+  contents: write
 
 concurrency:
   group: build-${{ github.ref }}
@@ -17,71 +20,125 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Recuperer le projet
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22'
           cache: npm
-      - run: npm ci
-      - run: npm test
+
+      - name: Installer les dependances
+        run: npm ci
+
+      - name: Executer les tests
+        run: npm test
 
   apk:
+    name: Compiler APK Android
     needs: test
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Recuperer le projet
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22'
           cache: npm
 
-      - uses: actions/setup-java@v4
+      - name: Installer Java 21
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: '21'
 
-      - uses: android-actions/setup-android@v3
+      - name: Configurer Android SDK
+        shell: bash
+        run: |
+          set -e
 
-      - run: npm ci
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
-      # Clé de signature stable (facultatif mais recommandé) : sans elle, chaque build est signé
-      # avec une clé différente et Android refuse de mettre à jour l'app par-dessus l'ancienne
-      # (il faudrait la désinstaller, donc perdre les données). Voir le README.
-      - name: Restaurer la clé de signature
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+
+          echo "SDK utilise : $SDK_ROOT"
+
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -name sdkmanager -type f | sort -V | tail -n 1)
+          fi
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERREUR : sdkmanager introuvable"
+            exit 1
+          fi
+
+          echo "sdkmanager : $SDKMANAGER"
+
+          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses || true
+
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0"
+
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+
+          echo "Installation Android terminee"
+
+      - name: Installer les dependances npm
+        run: npm ci
+
+      - name: Restaurer la cle de signature
+        shell: bash
         env:
           DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
         run: |
           if [ -n "$DEBUG_KEYSTORE_B64" ]; then
-            mkdir -p ~/.android
-            echo "$DEBUG_KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
-            echo "Clé de signature restaurée."
+            mkdir -p "$HOME/.android"
+            echo "$DEBUG_KEYSTORE_B64" | base64 -d > "$HOME/.android/debug.keystore"
+            echo "Cle de signature restauree"
           else
-            echo "::warning::Secret DEBUG_KEYSTORE_B64 absent : l'APK sera signé avec une clé jetable (pas de mise à jour par-dessus une version installée)."
+            echo "Aucune cle personnalisee : signature debug standard"
           fi
 
-      - name: Copier la page web dans le projet Android
+      - name: Synchroniser Capacitor Android
         run: npx cap sync android
 
-      - uses: gradle/actions/setup-gradle@v4
+      - name: Configurer Gradle
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Compiler l'APK
+      - name: Compiler APK Debug
         working-directory: android
+        shell: bash
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
-      - name: Nommer l'APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk ReelNote.apk
+      - name: Copier APK final
+        shell: bash
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk ReelNote.apk
+          ls -lh ReelNote.apk
 
-      - uses: actions/upload-artifact@v4
+      - name: Publier APK dans GitHub Actions
+        uses: actions/upload-artifact@v4
         with:
           name: ReelNote-apk
           path: ReelNote.apk
           if-no-files-found: error
+          retention-days: 30
 
-      - name: Publier dans Releases (tags v*)
+      - name: Publier GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
